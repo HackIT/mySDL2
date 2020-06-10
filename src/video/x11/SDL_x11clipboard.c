@@ -29,6 +29,13 @@
 #include "SDL_timer.h"
 
 
+/* 
+In this version I try to suppress CUT_BUFFERS which are depreciated now in 2020 and
+add support for the standard XA_PRIMARY clipboard which is a "selection clipboard"
+                [Awaxx] 10 June 2020
+*/
+
+
 /* If you don't support UTF-8, you might use XA_STRING here */
 #ifdef X_HAVE_UTF8_STRING
 #define TEXT_FORMAT X11_XInternAtom(display, "UTF8_STRING", False)
@@ -59,6 +66,32 @@ GetWindow(_THIS)
     return data->clipboard_window;
 }
 
+static int
+SynergyFix(_THIS, SDL_VideoData *videodata)
+{
+    /* When using synergy on Linux and when data has been put in the clipboard
+       on the remote (Windows anyway) machine then selection_waiting may never
+       be set to False. Time out after a while. */
+    Uint32 waitStart = SDL_GetTicks();
+    Uint32 waitElapsed = 0;
+    videodata->selection_waiting = SDL_TRUE;
+    while (videodata->selection_waiting) {
+        SDL_PumpEvents();
+        waitElapsed = SDL_GetTicks() - waitStart;
+        /* Wait one second for a clipboard response. */
+        if (waitElapsed > 1000) {
+            videodata->selection_waiting = SDL_FALSE;
+            SDL_SetError("Clipboard timeout");
+            /* We need to set the clipboard text so that next time we won't
+               timeout, otherwise we will hang on every call to this function. */
+            X11_SetClipboardText(_this, "");
+            return 0;
+        }
+    }
+    return 1;
+}
+
+
 /* We use our own cut-buffer for intermediate storage instead of  
    XA_CUT_BUFFER0 because their use isn't really defined for holding UTF8. */ 
 Atom
@@ -71,20 +104,17 @@ int
 X11_SetClipboardText(_THIS, const char *text)
 {
     Display *display = ((SDL_VideoData *) _this->driverdata)->display;
-    Atom format;
-    Window window;
+    Window window = GetWindow(_this);
     Atom XA_CLIPBOARD = X11_XInternAtom(display, "CLIPBOARD", 0);
 
     /* Get the SDL window that will own the selection */
-    window = GetWindow(_this);
     if (window == None) {
         return SDL_SetError("Couldn't find a window to own the selection");
     }
 
     /* Save the selection on the root window */
-    format = TEXT_FORMAT;
     X11_XChangeProperty(display, DefaultRootWindow(display),
-        X11_GetSDLCutBufferClipboardType(display), format, 8, PropModeReplace,
+        XA_CLIPBOARD, TEXT_FORMAT, 8, PropModeReplace,
         (const unsigned char *)text, SDL_strlen(text));
 
     if (XA_CLIPBOARD != None &&
@@ -92,9 +122,6 @@ X11_SetClipboardText(_THIS, const char *text)
         X11_XSetSelectionOwner(display, XA_CLIPBOARD, window, CurrentTime);
     }
 
-    if (X11_XGetSelectionOwner(display, XA_PRIMARY) != window) {
-        X11_XSetSelectionOwner(display, XA_PRIMARY, window, CurrentTime);
-    }
     return 0;
 }
 
@@ -103,8 +130,8 @@ X11_GetClipboardText(_THIS)
 {
     SDL_VideoData *videodata = (SDL_VideoData *) _this->driverdata;
     Display *display = videodata->display;
-    Atom format;
-    Window window;
+    Atom format = TEXT_FORMAT;
+    Window window = GetWindow(_this);
     Window owner;
     Atom selection;
     Atom seln_type;
@@ -112,54 +139,32 @@ X11_GetClipboardText(_THIS)
     unsigned long nbytes;
     unsigned long overflow;
     unsigned char *src;
-    char *text;
-    Uint32 waitStart;
-    Uint32 waitElapsed;
-    Atom XA_CLIPBOARD = X11_XInternAtom(display, "CLIPBOARD", 0);
+    char *text = NULL;
+    Atom XA_CLIPBOARD = X11_XInternAtom(display, "CLIPBOARD", False);
+
+    /* Checking STANDARD X11 PROPERTIES */
     if (XA_CLIPBOARD == None) {
-        SDL_SetError("Couldn't access X clipboard");
+        SDL_SetError("Couldn't access X11's XA_CLIPBOARD");
         return SDL_strdup("");
     }
 
-    text = NULL;
+    selection = XA_CLIPBOARD;
 
-    /* Get the window that holds the selection */
-    window = GetWindow(_this);
-    format = TEXT_FORMAT;
-    owner = X11_XGetSelectionOwner(display, XA_CLIPBOARD);
+    owner = X11_XGetSelectionOwner(display, selection);
     if (owner == None) {
-        /* Fall back to ancient X10 cut-buffers which do not support UTF8 strings*/
-        owner = DefaultRootWindow(display);
-        selection = XA_CUT_BUFFER0;
-        format = XA_STRING;
+        return SDL_strdup("error");
     } else if (owner == window) {
         owner = DefaultRootWindow(display);
-        selection = X11_GetSDLCutBufferClipboardType(display);
     } else {
         /* Request that the selection owner copy the data to our window */
+        /* I'm not sure all this interaction is required... TOBE INVESTIGATED !*/
         owner = window;
-        selection = X11_XInternAtom(display, "SDL_SELECTION", False);
+        selection = X11_XInternAtom(display, "SDL_CLIPBOARD", False);
         X11_XConvertSelection(display, XA_CLIPBOARD, format, selection, owner,
             CurrentTime);
 
-        /* When using synergy on Linux and when data has been put in the clipboard
-           on the remote (Windows anyway) machine then selection_waiting may never
-           be set to False. Time out after a while. */
-        waitStart = SDL_GetTicks();
-        videodata->selection_waiting = SDL_TRUE;
-        while (videodata->selection_waiting) {
-            SDL_PumpEvents();
-            waitElapsed = SDL_GetTicks() - waitStart;
-            /* Wait one second for a clipboard response. */
-            if (waitElapsed > 1000) {
-                videodata->selection_waiting = SDL_FALSE;
-                SDL_SetError("Clipboard timeout");
-                /* We need to set the clipboard text so that next time we won't
-                   timeout, otherwise we will hang on every call to this function. */
-                X11_SetClipboardText(_this, "");
-                return SDL_strdup("");
-            }
-        }
+        if( !SynergyFix(_this, videodata) )
+            return SDL_strdup("");
     }
 
     if (X11_XGetWindowProperty(display, owner, selection, 0, INT_MAX/4, False,
@@ -187,6 +192,99 @@ X11_HasClipboardText(_THIS)
 {
     SDL_bool result = SDL_FALSE;
     char *text = X11_GetClipboardText(_this);
+    if (text) {
+        result = text[0] != '\0' ? SDL_TRUE : SDL_FALSE;
+        SDL_free(text);
+    }
+    return result;
+}
+
+int
+X11_SetSelectionClipboardText(_THIS, const char *text)
+{
+    Display *display = ((SDL_VideoData *) _this->driverdata)->display;
+    Atom format;
+    Window window;
+
+    /* Get the SDL window that will own the selection */
+    window = GetWindow(_this);
+    if (window == None) {
+        return SDL_SetError("Couldn't find a window to own the selection");
+    }
+
+    /* Save the selection on the root window */
+    format = TEXT_FORMAT;
+    X11_XChangeProperty(display, DefaultRootWindow(display),
+        XA_PRIMARY, format, 8, PropModeReplace,
+        (const unsigned char *)text, SDL_strlen(text));
+
+    if (X11_XGetSelectionOwner(display, XA_PRIMARY) != window) {
+        X11_XSetSelectionOwner(display, XA_PRIMARY, window, CurrentTime);
+    }
+    return 0;
+}
+
+char *
+X11_GetSelectionClipboardText(_THIS)
+{
+    SDL_VideoData *videodata = (SDL_VideoData *) _this->driverdata;
+    Display *display = videodata->display;
+    Atom format = TEXT_FORMAT;
+    Window window = GetWindow(_this);
+    Window owner = X11_XGetSelectionOwner(display, XA_PRIMARY);
+    Atom selection = X11_XInternAtom(display, "PRIMARY", False);
+    Atom seln_type;
+    int seln_format;
+    unsigned long nbytes;
+    unsigned long overflow;
+    unsigned char *src;
+    char *text = NULL;
+
+    if (selection == None) {
+        SDL_SetError("Couldn't access X11's XA_PRIMARY");
+        return SDL_strdup("");
+    }
+
+    if (owner == None) {
+        return SDL_strdup("error");
+    } else if (owner == window) {
+        owner = DefaultRootWindow(display);
+    } else {
+        /* Request that the selection owner copy the data to our hidden x11 window */
+        owner = window;
+        selection = X11_XInternAtom(display, "SDL_SELECTION", False);
+        X11_XConvertSelection(display, XA_PRIMARY, format, selection, owner,
+            CurrentTime);
+
+        if( !SynergyFix(_this, videodata) )
+            return SDL_strdup("");
+    }
+
+    if (X11_XGetWindowProperty(display, owner, selection, 0, INT_MAX/4, False,
+            format, &seln_type, &seln_format, &nbytes, &overflow, &src)
+            == Success) {
+        if (seln_type == format) {
+            text = (char *)SDL_malloc(nbytes+1);
+            if (text) {
+                SDL_memcpy(text, src, nbytes);
+                text[nbytes] = '\0';
+            }
+        }
+        X11_XFree(src);
+    }
+
+    if (!text) {
+        text = SDL_strdup("");
+    }
+
+    return text;
+}
+
+SDL_bool
+X11_HasSelectionClipboardText(_THIS)
+{
+    SDL_bool result = SDL_FALSE;
+    char *text = X11_GetSelectionClipboardText(_this);
     if (text) {
         result = text[0] != '\0' ? SDL_TRUE : SDL_FALSE;
         SDL_free(text);

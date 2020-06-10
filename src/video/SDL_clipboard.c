@@ -87,4 +87,56 @@ SDL_HasClipboardText(void)
     }
 }
 
+int
+SDL_SetSelectionClipboardText(const char *text)
+{
+    SDL_VideoDevice *_this = SDL_GetVideoDevice();
+
+    if (!_this) {
+        return SDL_SetError("Video subsystem must be initialized to set clipboard text");
+    }
+    // checking user didn't do shit :D
+    if (!text) {
+        text = "";
+    }
+    if (_this->SetSelectionClipboardText) {
+        return _this->SetSelectionClipboardText(_this, text);
+    }
+
+    return 0;
+}
+
+char *
+SDL_GetSelectionClipboardText(void)
+{
+    SDL_VideoDevice *_this = SDL_GetVideoDevice();
+
+    if (!_this) {
+        SDL_SetError("Video subsystem must be initialized to get primary clipboard text");
+        return SDL_strdup("");
+    }
+
+    if (_this->GetSelectionClipboardText) {
+        return _this->GetSelectionClipboardText(_this);
+    }
+
+    return SDL_strdup("");
+}
+
+SDL_bool
+SDL_HasSelectionClipboardText(void)
+{
+    SDL_VideoDevice *_this = SDL_GetVideoDevice();
+
+    if (!_this) {
+        SDL_SetError("Video subsystem must be initialized to check clipboard text");
+        return SDL_FALSE;
+    }
+
+    if (_this->HasSelectionClipboardText) {
+        return _this->HasSelectionClipboardText(_this);
+    }
+    return 0;
+}
+
 /* vi: set ts=4 sw=4 expandtab: */
