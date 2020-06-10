@@ -47,12 +47,18 @@ add support for the standard XA_PRIMARY clipboard which is a "selection clipboar
 static Window
 GetWindow(_THIS)
 {
+    /* OLD WAY
+    SDL_Window *window;
+
+    window = _this->windows;
+    if (window) {
+        return ((SDL_WindowData *) window->driverdata)->xwindow;
+    }
+    return None;
+    */
+
     SDL_VideoData *data = (SDL_VideoData *) _this->driverdata;
 
-    /* We create an unmapped window that exists just to manage the clipboard,
-       since X11 selection data is tied to a specific window and dies with it.
-       We create the window on demand, so apps that don't use the clipboard
-       don't have to keep an unnecessary resource around. */
     if (data->clipboard_window == None) {
         Display *dpy = data->display;
         Window parent = RootWindow(dpy, DefaultScreen(dpy));
@@ -90,7 +96,6 @@ SynergyFix(_THIS, SDL_VideoData *videodata)
     }
     return 1;
 }
-
 
 /* We use our own cut-buffer for intermediate storage instead of  
    XA_CUT_BUFFER0 because their use isn't really defined for holding UTF8. */ 
@@ -130,7 +135,6 @@ X11_GetClipboardText(_THIS)
 {
     SDL_VideoData *videodata = (SDL_VideoData *) _this->driverdata;
     Display *display = videodata->display;
-    Atom format = TEXT_FORMAT;
     Window window = GetWindow(_this);
     Window owner;
     Atom selection;
@@ -160,7 +164,7 @@ X11_GetClipboardText(_THIS)
         /* I'm not sure all this interaction is required... TOBE INVESTIGATED !*/
         owner = window;
         selection = X11_XInternAtom(display, "SDL_CLIPBOARD", False);
-        X11_XConvertSelection(display, XA_CLIPBOARD, format, selection, owner,
+        X11_XConvertSelection(display, XA_CLIPBOARD, TEXT_FORMAT, selection, owner,
             CurrentTime);
 
         if( !SynergyFix(_this, videodata) )
@@ -168,9 +172,9 @@ X11_GetClipboardText(_THIS)
     }
 
     if (X11_XGetWindowProperty(display, owner, selection, 0, INT_MAX/4, False,
-            format, &seln_type, &seln_format, &nbytes, &overflow, &src)
+            TEXT_FORMAT, &seln_type, &seln_format, &nbytes, &overflow, &src)
             == Success) {
-        if (seln_type == format) {
+        if (seln_type == TEXT_FORMAT) {
             text = (char *)SDL_malloc(nbytes+1);
             if (text) {
                 SDL_memcpy(text, src, nbytes);
@@ -203,7 +207,6 @@ int
 X11_SetSelectionClipboardText(_THIS, const char *text)
 {
     Display *display = ((SDL_VideoData *) _this->driverdata)->display;
-    Atom format;
     Window window;
 
     /* Get the SDL window that will own the selection */
@@ -213,9 +216,8 @@ X11_SetSelectionClipboardText(_THIS, const char *text)
     }
 
     /* Save the selection on the root window */
-    format = TEXT_FORMAT;
     X11_XChangeProperty(display, DefaultRootWindow(display),
-        XA_PRIMARY, format, 8, PropModeReplace,
+        XA_PRIMARY, TEXT_FORMAT, 8, PropModeReplace,
         (const unsigned char *)text, SDL_strlen(text));
 
     if (X11_XGetSelectionOwner(display, XA_PRIMARY) != window) {
@@ -229,7 +231,6 @@ X11_GetSelectionClipboardText(_THIS)
 {
     SDL_VideoData *videodata = (SDL_VideoData *) _this->driverdata;
     Display *display = videodata->display;
-    Atom format = TEXT_FORMAT;
     Window window = GetWindow(_this);
     Window owner = X11_XGetSelectionOwner(display, XA_PRIMARY);
     Atom selection = X11_XInternAtom(display, "PRIMARY", False);
@@ -253,7 +254,7 @@ X11_GetSelectionClipboardText(_THIS)
         /* Request that the selection owner copy the data to our hidden x11 window */
         owner = window;
         selection = X11_XInternAtom(display, "SDL_SELECTION", False);
-        X11_XConvertSelection(display, XA_PRIMARY, format, selection, owner,
+        X11_XConvertSelection(display, XA_PRIMARY, TEXT_FORMAT, selection, owner,
             CurrentTime);
 
         if( !SynergyFix(_this, videodata) )
@@ -261,9 +262,9 @@ X11_GetSelectionClipboardText(_THIS)
     }
 
     if (X11_XGetWindowProperty(display, owner, selection, 0, INT_MAX/4, False,
-            format, &seln_type, &seln_format, &nbytes, &overflow, &src)
+            TEXT_FORMAT, &seln_type, &seln_format, &nbytes, &overflow, &src)
             == Success) {
-        if (seln_type == format) {
+        if (seln_type == TEXT_FORMAT) {
             text = (char *)SDL_malloc(nbytes+1);
             if (text) {
                 SDL_memcpy(text, src, nbytes);
