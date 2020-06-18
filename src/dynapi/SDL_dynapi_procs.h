@@ -126,9 +126,15 @@ SDL_DYNAPI_PROC(void,SDL_UnlockAudio,(void),(),)
 SDL_DYNAPI_PROC(void,SDL_UnlockAudioDevice,(SDL_AudioDeviceID a),(a),)
 SDL_DYNAPI_PROC(void,SDL_CloseAudio,(void),(),)
 SDL_DYNAPI_PROC(void,SDL_CloseAudioDevice,(SDL_AudioDeviceID a),(a),)
+
 SDL_DYNAPI_PROC(int,SDL_SetClipboardText,(const char *a),(a),return)
 SDL_DYNAPI_PROC(char*,SDL_GetClipboardText,(void),(),return)
 SDL_DYNAPI_PROC(SDL_bool,SDL_HasClipboardText,(void),(),return)
+
+SDL_DYNAPI_PROC(int,SDL_SetSelectionClipboardText,(const char *a),(a),return)
+SDL_DYNAPI_PROC(char*,SDL_GetSelectionClipboardText,(void),(),return)
+SDL_DYNAPI_PROC(SDL_bool,SDL_HasSelectionClipboardText,(void),(),return)
+
 SDL_DYNAPI_PROC(int,SDL_GetCPUCount,(void),(),return)
 SDL_DYNAPI_PROC(int,SDL_GetCPUCacheLineSize,(void),(),return)
 SDL_DYNAPI_PROC(SDL_bool,SDL_HasRDTSC,(void),(),return)

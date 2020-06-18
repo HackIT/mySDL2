@@ -87,6 +87,9 @@ typedef struct {
     Atom type;
 } SDL_x11Prop;
 
+
+
+
 /* Reads property
    Must call X11_XFree on results
  */
@@ -558,12 +561,13 @@ X11_HandleClipboardEvent(_THIS, const XEvent *xevent)
 {
     SDL_VideoData *videodata = (SDL_VideoData *) _this->driverdata;
     Display *display = videodata->display;
+    Atom XA_CLIPBOARD = X11_XInternAtom(display, "CLIPBOARD", 0);
+    Atom XA_TARGETS = X11_XInternAtom(display, "TARGETS", 0);
 
     SDL_assert(videodata->clipboard_window != None);
     SDL_assert(xevent->xany.window == videodata->clipboard_window);
 
     switch (xevent->type) {
-    /* Copy the selection from our own CUTBUFFER to the requested property */
         case SelectionRequest: {
             const XSelectionRequestEvent *req = &xevent->xselectionrequest;
             XEvent sevent;
@@ -571,12 +575,10 @@ X11_HandleClipboardEvent(_THIS, const XEvent *xevent)
             unsigned long nbytes;
             unsigned long overflow;
             unsigned char *seln_data;
-
 #ifdef DEBUG_XEVENTS
-            printf("window CLIPBOARD: SelectionRequest (requestor = %ld, target = %ld)\n",
-                req->requestor, req->target);
+            printf("window CLIPBOARD: SelectionRequest (requestor = %ld, target = %ld, selection = %ld, %ld)\n",
+                req->requestor, req->target, req->selection, XA_CLIPBOARD);
 #endif
-
             SDL_zero(sevent);
             sevent.xany.type = SelectionNotify;
             sevent.xselection.selection = req->selection;
@@ -585,15 +587,10 @@ X11_HandleClipboardEvent(_THIS, const XEvent *xevent)
             sevent.xselection.requestor = req->requestor;
             sevent.xselection.time = req->time;
 
-            /* !!! FIXME: We were probably storing this on the root window
-               because an SDL window might go away...? but we don't have to do
-               this now (or ever, really). */
-            if (X11_XGetWindowProperty(display, DefaultRootWindow(display),
-                    X11_GetSDLCutBufferClipboardType(display), 0, INT_MAX/4, False, req->target,
+            if (X11_XGetWindowProperty(display, videodata->clipboard_window,
+                    req->selection, 0, INT_MAX/4, False, req->target,
                     &sevent.xselection.target, &seln_format, &nbytes,
                     &overflow, &seln_data) == Success) {
-                /* !!! FIXME: cache atoms */
-                Atom XA_TARGETS = X11_XInternAtom(display, "TARGETS", 0);
                 if (sevent.xselection.target == req->target) {
                     X11_XChangeProperty(display, req->requestor, req->property,
                         sevent.xselection.target, seln_format, PropModeReplace,
@@ -625,14 +622,10 @@ X11_HandleClipboardEvent(_THIS, const XEvent *xevent)
         break;
 
         case SelectionClear: {
-            /* !!! FIXME: cache atoms */
-            Atom XA_CLIPBOARD = X11_XInternAtom(display, "CLIPBOARD", 0);
-
 #ifdef DEBUG_XEVENTS
             printf("window CLIPBOARD: SelectionClear (requestor = %ld, target = %ld)\n",
                 xevent->xselection.requestor, xevent->xselection.target);
 #endif
-
             if (xevent->xselectionclear.selection == XA_PRIMARY ||
                 (XA_CLIPBOARD != None && xevent->xselectionclear.selection == XA_CLIPBOARD)) {
                 SDL_SendClipboardUpdate();

@@ -95,9 +95,15 @@
 #define SDL_UnlockAudioDevice SDL_UnlockAudioDevice_REAL
 #define SDL_CloseAudio SDL_CloseAudio_REAL
 #define SDL_CloseAudioDevice SDL_CloseAudioDevice_REAL
+  
 #define SDL_SetClipboardText SDL_SetClipboardText_REAL
 #define SDL_GetClipboardText SDL_GetClipboardText_REAL
 #define SDL_HasClipboardText SDL_HasClipboardText_REAL
+
+#define SDL_SetSelectionClipboardText SDL_SetSelectionClipboardText_REAL
+#define SDL_GetSelectionClipboardText SDL_GetSelectionClipboardText_REAL
+#define SDL_HasSelectionClipboardText SDL_HasSelectionClipboardText_REAL
+
 #define SDL_GetCPUCount SDL_GetCPUCount_REAL
 #define SDL_GetCPUCacheLineSize SDL_GetCPUCacheLineSize_REAL
 #define SDL_HasRDTSC SDL_HasRDTSC_REAL

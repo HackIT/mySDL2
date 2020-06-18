@@ -59,21 +59,32 @@ GetWindow(_THIS)
     return data->clipboard_window;
 }
 
-/* We use our own cut-buffer for intermediate storage instead of  
-   XA_CUT_BUFFER0 because their use isn't really defined for holding UTF8. */ 
-Atom
-X11_GetSDLCutBufferClipboardType(Display *display)
+static Time
+get_timestamp (_THIS)
 {
-    return X11_XInternAtom(display, "SDL_CUTBUFFER", False);
+    Display *display = ((SDL_VideoData *) _this->driverdata)->display;
+    Window window = GetWindow(_this);
+    XEvent event;
+
+    X11_XSelectInput (display, window, PropertyChangeMask);
+    X11_XChangeProperty (display, window, XA_WM_NAME, XA_STRING, 8,
+                   PropModeAppend, NULL, 0);
+
+    while (1) {
+        X11_XNextEvent (display, &event);
+
+        if (event.type == PropertyNotify)
+            return event.xproperty.time;
+    }
 }
 
 int
-X11_SetClipboardText(_THIS, const char *text)
+SetClipboardText(_THIS, Atom selection, const char *text)
 {
     Display *display = ((SDL_VideoData *) _this->driverdata)->display;
     Atom format;
     Window window;
-    Atom XA_CLIPBOARD = X11_XInternAtom(display, "CLIPBOARD", 0);
+    Time timestamp = get_timestamp(_this);
 
     /* Get the SDL window that will own the selection */
     window = GetWindow(_this);
@@ -83,30 +94,26 @@ X11_SetClipboardText(_THIS, const char *text)
 
     /* Save the selection on the root window */
     format = TEXT_FORMAT;
-    X11_XChangeProperty(display, DefaultRootWindow(display),
-        X11_GetSDLCutBufferClipboardType(display), format, 8, PropModeReplace,
+    X11_XChangeProperty(display, window,
+        selection, format, 8, PropModeReplace,
         (const unsigned char *)text, SDL_strlen(text));
 
-    if (XA_CLIPBOARD != None &&
-        X11_XGetSelectionOwner(display, XA_CLIPBOARD) != window) {
-        X11_XSetSelectionOwner(display, XA_CLIPBOARD, window, CurrentTime);
+    if (selection != None &&
+        X11_XGetSelectionOwner(display, selection) != window) {
+        X11_XSetSelectionOwner(display, selection, window, timestamp);
     }
 
-    if (X11_XGetSelectionOwner(display, XA_PRIMARY) != window) {
-        X11_XSetSelectionOwner(display, XA_PRIMARY, window, CurrentTime);
-    }
     return 0;
 }
 
 char *
-X11_GetClipboardText(_THIS)
+GetClipboardText(_THIS, Atom selection)
 {
     SDL_VideoData *videodata = (SDL_VideoData *) _this->driverdata;
     Display *display = videodata->display;
     Atom format;
     Window window;
     Window owner;
-    Atom selection;
     Atom seln_type;
     int seln_format;
     unsigned long nbytes;
@@ -115,31 +122,26 @@ X11_GetClipboardText(_THIS)
     char *text;
     Uint32 waitStart;
     Uint32 waitElapsed;
-    Atom XA_CLIPBOARD = X11_XInternAtom(display, "CLIPBOARD", 0);
-    if (XA_CLIPBOARD == None) {
-        SDL_SetError("Couldn't access X clipboard");
-        return SDL_strdup("");
-    }
 
     text = NULL;
 
     /* Get the window that holds the selection */
     window = GetWindow(_this);
     format = TEXT_FORMAT;
-    owner = X11_XGetSelectionOwner(display, XA_CLIPBOARD);
+    owner = X11_XGetSelectionOwner(display, selection);
     if (owner == None) {
         /* Fall back to ancient X10 cut-buffers which do not support UTF8 strings*/
         owner = DefaultRootWindow(display);
-        selection = XA_CUT_BUFFER0;
-        format = XA_STRING;
+        //selection = XA_CUT_BUFFER0;
+        //format = XA_STRING;
     } else if (owner == window) {
-        owner = DefaultRootWindow(display);
-        selection = X11_GetSDLCutBufferClipboardType(display);
+        // owner = DefaultRootWindow(display);
+        //selection = X11_GetSDLCutBufferClipboardType(display);
     } else {
         /* Request that the selection owner copy the data to our window */
         owner = window;
-        selection = X11_XInternAtom(display, "SDL_SELECTION", False);
-        X11_XConvertSelection(display, XA_CLIPBOARD, format, selection, owner,
+        //selection = X11_XInternAtom(display, "SDL_SELECTION", False);
+        X11_XConvertSelection(display, selection, format, selection, owner,
             CurrentTime);
 
         /* When using synergy on Linux and when data has been put in the clipboard
@@ -183,15 +185,66 @@ X11_GetClipboardText(_THIS)
 }
 
 SDL_bool
-X11_HasClipboardText(_THIS)
+HasClipboardText(_THIS, Atom selection)
 {
     SDL_bool result = SDL_FALSE;
-    char *text = X11_GetClipboardText(_this);
+    char *text = GetClipboardText(_this, selection);
     if (text) {
         result = text[0] != '\0' ? SDL_TRUE : SDL_FALSE;
         SDL_free(text);
     }
     return result;
+}
+
+/* We use our own cut-buffer for intermediate storage instead of  
+   XA_CUT_BUFFER0 because their use isn't really defined for holding UTF8.
+Atom
+X11_GetSDLCutBufferClipboardType(Display *display)
+{
+    return X11_XInternAtom(display, "SDL_CUTBUFFER", False);
+}
+*/
+
+int
+X11_SetClipboardText(_THIS, const char *text) {
+    Display *display = ((SDL_VideoData *) _this->driverdata)->display;
+    Atom selection = X11_XInternAtom(display, "CLIPBOARD", 0);
+    return SetClipboardText(_this, selection, text);
+}
+
+int
+X11_SetSelectionClipboardText(_THIS, const char *text) {
+    Display *display = ((SDL_VideoData *) _this->driverdata)->display;
+    Atom selection = X11_XInternAtom(display, "PRIMARY", 0);
+    return SetClipboardText(_this, selection, text);
+}
+
+char *
+X11_GetClipboardText(_THIS) {
+    Display *display = ((SDL_VideoData *) _this->driverdata)->display;
+    Atom selection = X11_XInternAtom(display, "CLIPBOARD", 0);
+    return GetClipboardText(_this, selection);
+}
+
+char *
+X11_GetSelectionClipboardText(_THIS) {
+    Display *display = ((SDL_VideoData *) _this->driverdata)->display;
+    Atom selection = X11_XInternAtom(display, "PRIMARY", 0);
+    return GetClipboardText(_this, selection);
+}
+
+SDL_bool
+X11_HasClipboardText(_THIS) {
+    Display *display = ((SDL_VideoData *) _this->driverdata)->display;
+    Atom selection = X11_XInternAtom(display, "CLIPBOARD", 0);
+    return HasClipboardText(_this, selection);
+}
+
+SDL_bool
+X11_HasSelectionClipboardText(_THIS) {
+    Display *display = ((SDL_VideoData *) _this->driverdata)->display;
+    Atom selection = X11_XInternAtom(display, "PRIMARY", 0);
+    return HasClipboardText(_this, selection);
 }
 
 #endif /* SDL_VIDEO_DRIVER_X11 */

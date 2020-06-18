@@ -299,6 +299,12 @@ struct SDL_VideoDevice
     char * (*GetClipboardText) (_THIS);
     SDL_bool (*HasClipboardText) (_THIS);
 
+    /* Clipboard */
+    int (*SetSelectionClipboardText) (_THIS, const char *text);
+    char * (*GetSelectionClipboardText) (_THIS);
+    SDL_bool (*HasSelectionClipboardText) (_THIS);
+
+
     /* MessageBox */
     int (*ShowMessageBox) (_THIS, const SDL_MessageBoxData *messageboxdata, int *buttonid);
 
