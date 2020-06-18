@@ -41,45 +41,24 @@ extern "C" {
 /**
  * \brief Put UTF-8 text into the clipboard
  *
- * \sa SDL_SetClipboardText()
+ * \sa SDL_GetClipboardText()
  */
 extern DECLSPEC int SDLCALL SDL_SetClipboardText(const char *text);
 
 /**
  * \brief Get UTF-8 text from the clipboard, which must be freed with SDL_free()
  *
- * \sa SDL_GetClipboardText()
+ * \sa SDL_SetClipboardText()
  */
 extern DECLSPEC char * SDLCALL SDL_GetClipboardText(void);
 
 /**
  * \brief Returns a flag indicating whether the clipboard exists and contains a text string that is non-empty
  *
- * \sa SDL_HasClipboardText()
+ * \sa SDL_GetClipboardText()
  */
 extern DECLSPEC SDL_bool SDLCALL SDL_HasClipboardText(void);
 
-/**
- * \brief Put UTF-8 text into the PRIMARY X11 clipboard
- *
- * \sa SDL_SetSelectionClipboardText()
- */
-extern DECLSPEC int SDLCALL SDL_SetSelectionClipboardText(const char *text);
-
-/**
- * \brief Returns a flag indicating whether the clipboard exists and contains a text string that is non-empty
- *
- * \sa SDL_GetSelectionClipboardText()
- */
-extern DECLSPEC char * SDLCALL SDL_GetSelectionClipboardText(void);
-
-
-/**
- * \brief Returns a flag indicating whether the clipboard exists and contains a text string that is non-empty
- *
- * \sa SDL_HasSelectionClipboardText()
- */
-extern DECLSPEC SDL_bool SDLCALL SDL_HasSelectionClipboardText(void);
 
 /* Ends C function definitions when using C++ */
 #ifdef __cplusplus
