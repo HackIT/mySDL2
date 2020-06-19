@@ -129,18 +129,15 @@ GetClipboardText(_THIS, Atom selection)
     window = GetWindow(_this);
     format = TEXT_FORMAT;
     owner = X11_XGetSelectionOwner(display, selection);
+
     if (owner == None) {
-        /* Fall back to ancient X10 cut-buffers which do not support UTF8 strings*/
         owner = DefaultRootWindow(display);
-        //selection = XA_CUT_BUFFER0;
-        //format = XA_STRING;
+        /* no owner were given, switch to root window */
     } else if (owner == window) {
-        // owner = DefaultRootWindow(display);
-        //selection = X11_GetSDLCutBufferClipboardType(display);
+        /* owner were clipboard_window, no action required */
     } else {
         /* Request that the selection owner copy the data to our window */
         owner = window;
-        //selection = X11_XInternAtom(display, "SDL_SELECTION", False);
         X11_XConvertSelection(display, selection, format, selection, owner,
             CurrentTime);
 
