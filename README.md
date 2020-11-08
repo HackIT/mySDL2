@@ -20,5 +20,7 @@ char * SDL_GetSelectionClipboardText(void);
 
 SDL_bool SDL_HasSelectionClipboardText(void);
 
-Enjoy!
-    [HackIT]                     (boxx1@free.fr)
+###### Enjoy, HackIT.
+
+###### BTC: bc1q5jw0dsgc4x96l0um6vqexp5kq7wthlfvz944uc
+
